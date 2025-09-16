@@ -6,3 +6,7 @@ dist/*
 pywalfox.egg-info/*
 build/*
 .coverage
+/target
+.idea
+.junie
+Cargo.lock
