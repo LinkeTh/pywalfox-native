@@ -1,26 +1,22 @@
 use clap::{Parser, Subcommand};
 
 #[derive(Parser, Debug)]
-#[command(name = "pywalfox-native", about = "Linux-only native host for Pywalfox (Firefox)", version = version_string())]
+#[command(
+    name = "pywalfox-native",
+    about = "Linux-only native host for Pywalfox (Firefox)",
+    version = "2.7.4"
+)]
 pub struct Cli {
     #[command(subcommand)]
-    pub command: Option<Commands>,
+    pub command: Commands,
 }
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
     /// Install the Firefox native messaging manifest (user scope)
-    Install {
-        /// Install manifest globally (requires root) [not implemented yet]
-        #[arg(long)]
-        global: bool,
-    },
+    Install,
     /// Uninstall the Firefox native messaging manifest (user scope)
-    Uninstall {
-        /// Uninstall global manifest (requires root) [not implemented yet]
-        #[arg(long)]
-        global: bool,
-    },
+    Uninstall,
     /// Start the native host in the foreground (stdin/stdout)
     Start,
     /// Trigger an update (refetch colors)
@@ -31,8 +27,4 @@ pub enum Commands {
     Light,
     /// Set theme mode to auto
     Auto,
-}
-
-pub const fn version_string() -> &'static str {
-    concat!("v", env!("CARGO_PKG_VERSION"))
 }

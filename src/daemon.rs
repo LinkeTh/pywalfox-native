@@ -1,49 +1,11 @@
-use crate::native_messaging::{read_message, write_message};
-use crate::themes;
+use crate::native_messaging::{
+    read_message, send_colors, send_invalid_response, send_version, Request,
+};
 use anyhow::Result;
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub struct Request {
-    action: String,
-    target: Option<String>,
-    size: Option<u32>,
-}
-
-/*
-           if action == ACTIONS['VERSION']:
-           self.send_version()
-       elif action == ACTIONS['COLORS']:
-           self.send_pywal_colors()
-       elif action == ACTIONS['CSS_ENABLE']:
-           self.send_enable_css_response(message)
-       elif action == ACTIONS['CSS_DISABLE']:
-           self.send_disable_css_response(message)
-       elif action == ACTIONS['CSS_FONT_SIZE']:
-*/
-
-#[derive(Debug, Serialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub struct Response<T> {
-    /*
-     action: string;
-    success: boolean;
-    error?: string;
-    data?: any;
-    */
-    action: String,
-    success: bool,
-    error: Option<String>,
-    data: Option<T>, // Error { message: String },
-}
-#[derive(Debug, Serialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-struct ColorData {
-    colors: Vec<String>,
-    wallpaper: Option<String>,
-}
-
+use std::io::{BufRead, BufReader};
+use std::os::unix::net::{UnixListener, UnixStream};
+use std::thread;
+use tracing::{error, info};
 /*
 ACTIONS = {
     'VERSION': 'debug:version',
@@ -56,66 +18,68 @@ ACTIONS = {
     'THEME_MODE': 'theme:mode',
 }
  */
-pub fn run() -> Result<()> {
-    // info!("pywalfox-native started asdf");
-    // Simple loop: echo ping and log others
-    while let Some(msg) = read_message::<Request>()? {
-        // info!("> {:?}", msg);
 
+const SOCKET_PATH: &str = "/tmp/mypy.sock";
+pub fn run() -> Result<()> {
+    info!("starting pywalfox daemon");
+    start_socket_server()?;
+    while let Some(msg) = read_message::<Request>()? {
         match msg.action.as_str() {
             "debug:version" => {
-                let response = Response {
-                    action: "debug:version".to_string(),
-                    success: true,
-                    error: None,
-                    data: Some("2.7.4".to_string()),
-                };
-                // info!("response {:?}", response);
-
-                let _ = write_message(&response);
+                send_version()?;
             }
             "action:colors" => {
-                let colors = themes::read_pywal().expect("Could not read colors from pywal");
-
-                /*
-
-
-                export interface IPywalData {
-                  colors: IPywalColors;
-                  wallpaper: string;
-                }
-                                export interface IPywalColors extends Array<string> {
-                  [index: number]: string;
-                }
-
-
-                                 */
-
-                let response = Response {
-                    action: "action:colors".to_string(),
-                    success: true,
-                    error: None,
-                    data: Some(ColorData {
-                        colors: colors.0,
-                        wallpaper: colors.1,
-                    }),
-                };
-                // info!("response {:?}", response);
-
-                let _ = write_message(&response);
-                /*
-                          (success, pywal_data, message) = get_pywal_colors()
-                self.messenger.send_message(Message(
-                    ACTIONS['COLORS'],
-                    data=pywal_data,
-                    success=success,
-                    message=message,
-                ))
-                         */
+                send_colors()?;
             }
-            _ => {}
+            _ => {
+                send_invalid_response()?;
+            }
         }
     }
 
+    Ok(())
+}
+
+fn handle_client(stream: UnixStream) {
+    let reader = BufReader::new(&stream);
+    for line in reader.lines() {
+        match line {
+            Ok(cmd) => {
+                info!("Received command: {}", cmd);
+                if cmd == "update" {
+                    info!("Quit command received. Exiting server.");
+                    send_colors().unwrap();
+                    // std::process::exit(0);
+                }
+            }
+            Err(e) => {
+                error!("Error reading from client: {}", e);
+                break;
+            }
+        }
+    }
+}
+
+pub(crate) fn send_command(cmd: &str) -> Result<()> {
+    use std::io::Write;
+    let mut stream = UnixStream::connect(SOCKET_PATH)?;
+    writeln!(stream, "{}", cmd)?;
+    Ok(())
+}
+fn start_socket_server() -> Result<()> {
+    let _ = std::fs::remove_file(SOCKET_PATH); // clean up stale socket
+    let listener = UnixListener::bind(SOCKET_PATH)?;
+    info!("Server started, listening on {}", SOCKET_PATH);
+
+    thread::spawn(move || {
+        for stream in listener.incoming() {
+            match stream {
+                Ok(stream) => {
+                    thread::spawn(|| handle_client(stream));
+                }
+                Err(e) => error!("Connection failed: {}", e),
+            }
+        }
+    });
     Ok(())
 }

@@ -5,49 +5,67 @@ mod install;
 mod native_messaging;
 mod themes;
 
+use crate::native_messaging::{send_colors, send_theme_mode};
 use anyhow::Result;
 use clap::Parser;
 use cli::{Cli, Commands};
+use tracing::{error, info};
 
 fn main() {
+    let file_appender = tracing_appender::rolling::never("/home/linket/", "pywalfox.log");
+    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+    tracing_subscriber::fmt().with_writer(non_blocking).init();
+
     if let Err(e) = real_main() {
-        eprintln!("error: {e}");
+        error!("error: {e}");
         std::process::exit(1);
     }
 }
 
 fn real_main() -> Result<()> {
-    // logging::init();
     let cli = Cli::parse();
+    info!("init pywalfox");
 
     match cli.command {
-        Some(Commands::Install { global: _ }) => {
+        Commands::Install => {
             install::install_manifest(false)?;
         }
-        Some(Commands::Uninstall { global: _ }) => {
+        Commands::Uninstall => {
             install::uninstall_manifest(false)?;
         }
-        Some(Commands::Start) => {
+        Commands::Start => {
             daemon::run()?;
         }
-        Some(Commands::Update) => {
-            themes::handle_update()?;
+        Commands::Update => {
+            handle_update()?;
         }
-        Some(Commands::Dark) => {
-            themes::handle_dark()?;
+        Commands::Dark => {
+            handle_dark()?;
         }
-        Some(Commands::Light) => {
-            themes::handle_light()?;
+        Commands::Light => {
+            handle_light()?;
         }
-        Some(Commands::Auto) => {
-            themes::handle_auto()?;
-        }
-        None => {
-            // No subcommand prints help by default via clap derive
-            // But we can show version
-            println!("{}", cli::version_string());
+        Commands::Auto => {
+            handle_auto()?;
         }
     }
 
     Ok(())
+}
+
+fn handle_update() -> Result<()> {
+    daemon::send_command("update")
+    // send_colors()
+}
+
+fn handle_dark() -> Result<()> {
+    send_theme_mode("dark")
+}
+
+fn handle_light() -> Result<()> {
+    send_theme_mode("light")
+}
+
+fn handle_auto() -> Result<()> {
+    send_theme_mode("auto")
 }
