@@ -1,6 +1,8 @@
 use crate::native_messaging::{
-    read_message, send_colors, send_invalid_response, send_version, Request,
+    read_message, send_colors, send_invalid_response, send_theme_mode, send_version, Request,
 };
+use std::io::Write;
+
 use anyhow::Result;
 use std::io::{BufRead, BufReader};
 use std::os::unix::net::{UnixListener, UnixStream};
@@ -47,9 +49,13 @@ fn handle_client(stream: UnixStream) {
             Ok(cmd) => {
                 info!("Received command: {}", cmd);
                 if cmd == "update" {
-                    info!("Quit command received. Exiting server.");
                     send_colors().unwrap();
-                    // std::process::exit(0);
+                } else if cmd == "auto" {
+                    send_theme_mode("auto").unwrap();
+                } else if cmd == "dark" {
+                    send_theme_mode("dark").unwrap();
+                } else if cmd == "light" {
+                    send_theme_mode("light").unwrap();
                 }
             }
             Err(e) => {
@@ -61,7 +67,6 @@ fn handle_client(stream: UnixStream) {
 }
 
 pub(crate) fn send_command(cmd: &str) -> Result<()> {
-    use std::io::Write;
     let mut stream = UnixStream::connect(SOCKET_PATH)?;
     writeln!(stream, "{}", cmd)?;
     Ok(())

@@ -5,13 +5,14 @@ mod install;
 mod native_messaging;
 mod themes;
 
-use crate::native_messaging::{send_colors, send_theme_mode};
+use crate::native_messaging::send_theme_mode;
 use anyhow::Result;
 use clap::Parser;
 use cli::{Cli, Commands};
 use tracing::{error, info};
 
 fn main() {
+    // init_logging();
     let file_appender = tracing_appender::rolling::never("/home/linket/", "pywalfox.log");
     let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
     tracing_subscriber::fmt().with_writer(non_blocking).init();
@@ -20,6 +21,12 @@ fn main() {
         error!("error: {e}");
         std::process::exit(1);
     }
+}
+
+fn init_logging() {
+    let file_appender = tracing_appender::rolling::never("/home/linket/", "pywalfox.log");
+    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+    tracing_subscriber::fmt().with_writer(non_blocking).init();
 }
 
 fn real_main() -> Result<()> {
@@ -55,17 +62,16 @@ fn real_main() -> Result<()> {
 
 fn handle_update() -> Result<()> {
     daemon::send_command("update")
-    // send_colors()
 }
 
 fn handle_dark() -> Result<()> {
-    send_theme_mode("dark")
+    daemon::send_command("dark")
 }
 
 fn handle_light() -> Result<()> {
-    send_theme_mode("light")
+    daemon::send_command("light")
 }
 
 fn handle_auto() -> Result<()> {
-    send_theme_mode("auto")
+    daemon::send_command("auto")
 }
